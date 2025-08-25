@@ -1,4 +1,4 @@
-
+# src/model.py
 import joblib
 import pandas as pd
 import numpy as np
@@ -8,17 +8,20 @@ class DrugSpendingPredictor:
         self.model = model
         self.feature_cols = feature_cols
         self.cat_cols = cat_cols
-        self.target_log_col = target_col_log
+        self.target_log_col = target_log_col
 
     def predict(self, df):
         """Predict total spending on new data."""
         df = df.sort_values(['brnd_name', 'year']).copy()
         target_col = "tot_spndng"
-        df[f"{target_col}_log"] = np.log1p(df[target_col])
+        target_log_col = f"{target_col}_log"
+
+        # Add log-transformed target
+        df[target_log_col] = np.log1p(df[target_col])
 
         # Lag features
-        df['spend_lag1'] = df.groupby('brnd_name')[f"{target_col}_log"].shift(1)
-        df['spend_lag2'] = df.groupby('brnd_name')[f"{target_col}_log"].shift(2)
+        df['spend_lag1'] = df.groupby('brnd_name')[target_log_col].shift(1)
+        df['spend_lag2'] = df.groupby('brnd_name')[target_log_col].shift(2)
 
         # Rolling mean
         df['spend_roll_mean'] = df.groupby('brnd_name')['spend_lag1'].transform(
@@ -34,7 +37,9 @@ class DrugSpendingPredictor:
             'avg_spnd_per_clm', 'avg_spnd_per_bene', 'outlier_flag'
         ]
         for col in dynamic_features:
-            df[f"{col}_log"] = np.log1p(df[col])
+            log_col = f"{col}_log"
+            if log_col not in df.columns:
+                df[log_col] = np.log1p(df[col])
 
         # Prepare feature matrix
         X = df[self.feature_cols].copy()
@@ -43,4 +48,4 @@ class DrugSpendingPredictor:
 
         # Predict in log space and reverse transform
         log_pred = self.model.predict(X)
-        return np.expm1(log_pred)
+        return np.expm1(log_pred) 
