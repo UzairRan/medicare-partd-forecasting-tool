@@ -1,4 +1,3 @@
-# app.py
 import sys
 import os
 
@@ -101,6 +100,37 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "Explainability"
 ])
 
+# -------------------------------
+# Helper Function: Map view_mode to column and labels
+# -------------------------------
+def get_view_data(df, view_mode):
+    """Return the appropriate column and label for given view mode."""
+    if view_mode == "Total Spending":
+        col = 'tot_spndng'
+        ylabel = "Total Spending ($)"
+        title_suffix = "Spending Trend"
+    elif view_mode == "Per-Unit Cost":
+        col = 'avg_spnd_per_dsg_unt_wghtd'
+        ylabel = "Avg Spend per Unit ($)"
+        title_suffix = "Per-Unit Cost Trend"
+    elif view_mode == "Total Claims":
+        col = 'tot_clms'
+        ylabel = "Total Claims"
+        title_suffix = "Claim Volume Trend"
+    elif view_mode == "CAGR & Outliers":
+        col = 'cagr_avg_spnd_per_dsg_unt_19_23'
+        ylabel = "CAGR (%)"
+        title_suffix = "CAGR Trend (2019–2023)"
+    elif view_mode == "High-Volume Drugs":
+        col = 'tot_clms'
+        ylabel = "Total Claims"
+        title_suffix = "Claim Volume Trend"
+    else:
+        col = 'tot_spndng'
+        ylabel = "Total Spending ($)"
+        title_suffix = "Spending Trend"
+    return col, ylabel, title_suffix
+
 # Tab 1: Forecast Explorer
 with tab1:
     st.subheader("Drug Spending Forecast Explorer")
@@ -114,12 +144,16 @@ with tab1:
             st.warning(f"⚠️ No 2024 forecast available for *{selected_drug}*")
         else:
             forecast_val = forecast_row['forecast_2024_total_spending'].iloc[0]
+
+            col, ylabel, title = get_view_data(drug_data, view_mode)
+            y_data = drug_data[col]
+
             fig, ax = plt.subplots(figsize=(10, 5))
-            ax.plot(drug_data['year'], drug_data['tot_spndng'], marker='o', label='Historical', color='blue')
+            ax.plot(drug_data['year'], y_data, marker='o', label='Historical', color='blue')
             ax.axhline(y=forecast_val, color='red', linestyle='--', label='2024 Forecast')
             ax.set_xlabel("Year")
-            ax.set_ylabel("Total Spending ($)")
-            ax.set_title(f"{selected_drug} Spending Trend (2019–2024)")
+            ax.set_ylabel(ylabel)
+            ax.set_title(f"{selected_drug} {title}")
             ax.legend()
             ax.grid(True)
             st.pyplot(fig)
@@ -131,8 +165,14 @@ with tab2:
     if df_2023_filtered.empty:
         st.warning("No data available for selected filters.")
     else:
-        top_2023 = df_2023_filtered.groupby('brnd_name')['tot_spndng'].sum().nlargest(10).reset_index()
-        top_2023 = top_2023.rename(columns={'tot_spndng': 'spend_2023'})
+        col, ylabel, _ = get_view_data(df_2023_filtered, view_mode)
+
+        # Filter by drug if selected
+        if selected_drug != "All":
+            df_2023_filtered = df_2023_filtered[df_2023_filtered['brnd_name'] == selected_drug]
+
+        top_2023 = df_2023_filtered.groupby('brnd_name')[col].sum().nlargest(10).reset_index()
+        top_2023 = top_2023.rename(columns={col: 'spend_2023'})
         top_2023 = top_2023.merge(forecast_df[['brnd_name', 'forecast_2024_total_spending']], on='brnd_name', how='left')
         top_2023['change_pct'] = ((top_2023['forecast_2024_total_spending'] - top_2023['spend_2023']) / top_2023['spend_2023']) * 100
 
@@ -142,8 +182,8 @@ with tab2:
         ax.bar(x - width/2, top_2023['spend_2023'], width, label='2023', color='skyblue')
         ax.bar(x + width/2, top_2023['forecast_2024_total_spending'], width, label='2024 Forecast', color='salmon')
         ax.set_xlabel("Drug")
-        ax.set_ylabel("Spending ($)")
-        ax.set_title("Top 10 Drugs: 2023 vs 2024 Forecast")
+        ax.set_ylabel(ylabel)
+        ax.set_title(f"Top 10 {view_mode} (2023 vs 2024)")
         ax.set_xticks(x)
         ax.set_xticklabels(top_2023['brnd_name'], rotation=45, ha='right')
         ax.legend()
@@ -159,10 +199,11 @@ with tab3:
     if df_2023_filtered.empty:
         st.warning("No data available for selected filters.")
     else:
-        cagr_drugs = df_2023_filtered.sort_values('cagr_avg_spnd_per_dsg_unt_19_23', ascending=False).head(10)
-        if cagr_drugs.empty:
-            st.warning("No CAGR data available.")
-        else:
+        col, ylabel, title_suffix = get_view_data(df_2023_filtered, view_mode)
+
+        # Always show CAGR chart when mode is CAGR
+        if view_mode == "CAGR & Outliers":
+            cagr_drugs = df_2023_filtered.sort_values('cagr_avg_spnd_per_dsg_unt_19_23', ascending=False).head(10)
             fig, ax = plt.subplots(figsize=(8, 5))
             ax.barh(cagr_drugs['brnd_name'], cagr_drugs['cagr_avg_spnd_per_dsg_unt_19_23'], color='teal')
             ax.set_xlabel("CAGR (%)")
@@ -170,7 +211,11 @@ with tab3:
             ax.invert_yaxis()
             plt.tight_layout()
             st.pyplot(fig)
+        else:
+            # Show other metrics
+            pass
 
+        # Always show outlier table regardless of view_mode
         outliers = df_2023_filtered[df_2023_filtered['chg_avg_spnd_per_dsg_unt_22_23'] > 50]
         if not outliers.empty:
             st.markdown("### 🔴 Drugs with >50% YoY Price Spike (2022 → 2023)")
@@ -183,14 +228,16 @@ with tab4:
     if df_2023_filtered.empty:
         st.warning("No data available for selected filters.")
     else:
-        high_volume = df_2023_filtered.groupby('brnd_name')['tot_clms'].sum().nlargest(10).reset_index()
+        col, ylabel, _ = get_view_data(df_2023_filtered, view_mode)
+        
+        high_volume = df_2023_filtered.groupby('brnd_name')[col].sum().nlargest(10).reset_index()
         if high_volume.empty:
             st.warning("No high-volume drugs found.")
         else:
             fig, ax = plt.subplots(figsize=(8, 5))
-            sns.barplot(data=high_volume, y='brnd_name', x='tot_clms', ax=ax, palette='viridis')
-            ax.set_xlabel("Total Claims")
-            ax.set_title("Top 10 Most Prescribed Drugs in 2023")
+            sns.barplot(data=high_volume, y='brnd_name', x=col, ax=ax, palette='viridis')
+            ax.set_xlabel(ylabel)
+            ax.set_title(f"Top 10 Most {view_mode.replace(' ', '')} Drugs in 2023")
             plt.tight_layout()
             st.pyplot(fig)
 
@@ -226,4 +273,4 @@ if st.sidebar.button("Download Forecast CSV"):
             data=f,
             file_name="medicare_drug_forecasts_2024.csv",
             mime="text/csv"
-        ) 
+        )  
