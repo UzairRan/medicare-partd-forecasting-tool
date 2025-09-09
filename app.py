@@ -257,20 +257,34 @@ with tab5:
         st.markdown("💡 This insight is based on model behavior — SHAP integration coming soon.")
 
 # -------------------------------
+# -------------------------------
 # 6. Export Data
 # -------------------------------
 st.sidebar.markdown("---")
 st.sidebar.markdown("Export Data")
 
-# Use st.download_button for actual download
-if st.sidebar.button("Download Forecast CSV"):
-    # Save to temp file
-    forecast_df.to_csv("full_drugs_forecast_2024_export.csv", index=False)
-    # Force download
-    with open("full_drugs_forecast_2024_export.csv", "r") as f:
-        st.sidebar.download_button(
-            label="Click to Download",
-            data=f,
-            file_name="medicare_drug_forecasts_2024.csv",
-            mime="text/csv"
-        )  
+# Prepare filtered data for download
+export_df = forecast_df.copy()
+
+if selected_drug != "All":
+    export_df = export_df[export_df['brnd_name'] == selected_drug]
+
+# Optional: Filter by manufacturer if needed
+if selected_manufacturer != "All":
+    # Note: forecast_df may not have manufacturer info — only drug-level forecasts
+    pass  # Skip for now unless you've added manufacturer-level forecasts
+
+# Convert to CSV
+@st.cache_data
+def convert_df_to_csv(df):
+    return df.to_csv(index=False).encode('utf-8')
+
+csv = convert_df_to_csv(export_df)
+
+# Use download_button directly (not inside a regular button)
+st.sidebar.download_button(
+    label="Download Forecast CSV",
+    data=csv,
+    file_name=f"medicare_forecast_2024_{'all_drugs' if selected_drug == 'All' else selected_drug.lower().replace(' ', '_')}.csv",
+    mime="text/csv"
+) 
