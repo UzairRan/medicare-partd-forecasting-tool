@@ -13,7 +13,6 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
-import seaborn as sns
 
 # -------------------------------
 # 1. Page Configuration
@@ -64,9 +63,6 @@ selected_drug = st.sidebar.selectbox("Select Drug", ["All"] + drug_list)
 manufacturer_list = sorted(df_long['mftr_name'].dropna().unique())
 selected_manufacturer = st.sidebar.selectbox("Filter by Manufacturer", ["All"] + manufacturer_list)
 
-# Year range
-year_range = st.sidebar.slider("Year Range", 2019, 2023, (2019, 2023))
-
 # View mode
 view_mode = st.sidebar.radio(
     "View Mode",
@@ -78,16 +74,19 @@ view_mode = st.sidebar.radio(
 # -------------------------------
 df_filtered = df_long.copy()
 
+# Apply drug filter
 if selected_drug != "All":
     df_filtered = df_filtered[df_filtered['brnd_name'] == selected_drug]
 
+# Apply manufacturer filter
 if selected_manufacturer != "All":
     df_filtered = df_filtered[df_filtered['mftr_name'] == selected_manufacturer]
 
-df_filtered = df_filtered[df_filtered['year'].between(year_range[0], year_range[1])]
+# Always include all years (2019–2023) — we're removing year range filter
+df_filtered = df_filtered[df_filtered['year'].between(2019, 2023)]
 
-# Filter 2023 data for charts
-df_2023_filtered = df_filtered[df_filtered['year'] == 2023]
+# Filter 2023 data for charts (used in Top Cost Drivers, CAGR, High-Volume tabs)
+df_2023_filtered = df_filtered[df_filtered['year'] == 2023].copy()
 
 # -------------------------------
 # 5. Dashboard Tabs
@@ -138,7 +137,10 @@ with tab1:
     if selected_drug == "All":
         st.info("Select a drug to view its forecast.")
     else:
+        # Get historical data for the selected drug across all years
         drug_data = df_long[df_long['brnd_name'] == selected_drug].sort_values('year')
+        
+        # Get forecast data
         forecast_row = forecast_df[forecast_df['brnd_name'] == selected_drug]
         if forecast_row.empty:
             st.warning(f"⚠️ No 2024 forecast available for *{selected_drug}*")
@@ -149,13 +151,14 @@ with tab1:
             y_data = drug_data[col]
 
             fig, ax = plt.subplots(figsize=(10, 5))
-            ax.plot(drug_data['year'], y_data, marker='o', label='Historical', color='blue')
-            ax.axhline(y=forecast_val, color='red', linestyle='--', label='2024 Forecast')
-            ax.set_xlabel("Year")
-            ax.set_ylabel(ylabel)
-            ax.set_title(f"{selected_drug} {title}")
-            ax.legend()
-            ax.grid(True)
+            ax.plot(drug_data['year'], y_data, marker='o', label='Historical', color='blue', linewidth=2, markersize=6)
+            ax.axhline(y=forecast_val, color='red', linestyle='--', linewidth=2, label='2024 Forecast')
+            ax.set_xlabel("Year", fontsize=12)
+            ax.set_ylabel(ylabel, fontsize=12)
+            ax.set_title(f"{selected_drug} {title}", fontsize=14, fontweight='bold')
+            ax.legend(fontsize=10)
+            ax.grid(True, alpha=0.3)
+            ax.tick_params(axis='both', which='major', labelsize=10)
             st.pyplot(fig)
 
 # Tab 2: Top Cost Drivers
@@ -167,29 +170,36 @@ with tab2:
     else:
         col, ylabel, _ = get_view_data(df_2023_filtered, view_mode)
 
-        # Filter by drug if selected
-        if selected_drug != "All":
-            df_2023_filtered = df_2023_filtered[df_2023_filtered['brnd_name'] == selected_drug]
-
+        # Always define top_2023 even if no drug is selected
         top_2023 = df_2023_filtered.groupby('brnd_name')[col].sum().nlargest(10).reset_index()
         top_2023 = top_2023.rename(columns={col: 'spend_2023'})
+        
+        # Merge with forecast data
         top_2023 = top_2023.merge(forecast_df[['brnd_name', 'forecast_2024_total_spending']], on='brnd_name', how='left')
         top_2023['change_pct'] = ((top_2023['forecast_2024_total_spending'] - top_2023['spend_2023']) / top_2023['spend_2023']) * 100
 
-        fig, ax = plt.subplots(figsize=(10, 6))
-        x = np.arange(len(top_2023))
-        width = 0.4
-        ax.bar(x - width/2, top_2023['spend_2023'], width, label='2023', color='skyblue')
-        ax.bar(x + width/2, top_2023['forecast_2024_total_spending'], width, label='2024 Forecast', color='salmon')
-        ax.set_xlabel("Drug")
-        ax.set_ylabel(ylabel)
-        ax.set_title(f"Top 10 {view_mode} (2023 vs 2024)")
-        ax.set_xticks(x)
-        ax.set_xticklabels(top_2023['brnd_name'], rotation=45, ha='right')
-        ax.legend()
-        plt.tight_layout()
-        st.pyplot(fig)
+        # Only show chart when a specific drug is selected
+        if selected_drug != "All":
+            # Filter data for charting
+            filtered_for_chart = top_2023[top_2023['brnd_name'] == selected_drug]
+            if not filtered_for_chart.empty:
+                fig, ax = plt.subplots(figsize=(10, 6))
+                x = np.arange(len(filtered_for_chart))
+                width = 0.4
+                
+                bars1 = ax.bar(x - width/2, filtered_for_chart['spend_2023'], width, label='2023', color='skyblue', edgecolor='black', linewidth=0.5)
+                bars2 = ax.bar(x + width/2, filtered_for_chart['forecast_2024_total_spending'], width, label='2024 Forecast', color='salmon', edgecolor='black', linewidth=0.5)
+                    
+                ax.set_xlabel("Drug", fontsize=12)
+                ax.set_ylabel(ylabel, fontsize=12)
+                ax.set_title(f"{selected_drug} in {view_mode} (2023 vs 2024)", fontsize=14, fontweight='bold')
+                ax.set_xticks(x)
+                ax.set_xticklabels(filtered_for_chart['brnd_name'], rotation=45, ha='right', fontsize=10)
+                ax.legend(fontsize=10)
+                plt.tight_layout()
+                st.pyplot(fig)
 
+        # Always show full top 10 table
         st.dataframe(top_2023)
 
 # Tab 3: CAGR & Outliers
@@ -201,21 +211,28 @@ with tab3:
     else:
         col, ylabel, title_suffix = get_view_data(df_2023_filtered, view_mode)
 
-        # Always show CAGR chart when mode is CAGR
-        if view_mode == "CAGR & Outliers":
+        # Show CAGR chart only in CAGR mode and when a drug is selected
+        if view_mode == "CAGR & Outliers" and selected_drug != "All":
             cagr_drugs = df_2023_filtered.sort_values('cagr_avg_spnd_per_dsg_unt_19_23', ascending=False).head(10)
-            fig, ax = plt.subplots(figsize=(8, 5))
-            ax.barh(cagr_drugs['brnd_name'], cagr_drugs['cagr_avg_spnd_per_dsg_unt_19_23'], color='teal')
-            ax.set_xlabel("CAGR (%)")
-            ax.set_title("Top 10 Drugs by CAGR (2019–2023)")
-            ax.invert_yaxis()
-            plt.tight_layout()
-            st.pyplot(fig)
-        else:
-            # Show other metrics
-            pass
+            filtered_cagr = cagr_drugs[cagr_drugs['brnd_name'] == selected_drug] if selected_drug != "All" else cagr_drugs
+            
+            if not filtered_cagr.empty:
+                fig, ax = plt.subplots(figsize=(8, 5))
+                bars = ax.barh(filtered_cagr['brnd_name'], filtered_cagr['cagr_avg_spnd_per_dsg_unt_19_23'], color='teal', edgecolor='black', linewidth=0.5)
+                ax.set_xlabel("CAGR (%)", fontsize=12)
+                ax.set_title(f"Top Drugs by CAGR (2019–2023)", fontsize=14, fontweight='bold')
+                ax.invert_yaxis()
+                ax.tick_params(axis='both', which='major', labelsize=10)
+                
+                # Add value labels
+                for i, bar in enumerate(bars):
+                    width = bar.get_width()
+                    ax.text(bar.get_x() + width + 0.1, bar.get_y() + bar.get_height()/2, 
+                           f'{width:.1f}%', va='center', ha='left', fontsize=9)
+                plt.tight_layout()
+                st.pyplot(fig)
 
-        # Always show outlier table regardless of view_mode
+        # Always show outlier table regardless of drug selection
         outliers = df_2023_filtered[df_2023_filtered['chg_avg_spnd_per_dsg_unt_22_23'] > 50]
         if not outliers.empty:
             st.markdown("### 🔴 Drugs with >50% YoY Price Spike (2022 → 2023)")
@@ -231,15 +248,31 @@ with tab4:
         col, ylabel, _ = get_view_data(df_2023_filtered, view_mode)
         
         high_volume = df_2023_filtered.groupby('brnd_name')[col].sum().nlargest(10).reset_index()
-        if high_volume.empty:
-            st.warning("No high-volume drugs found.")
-        else:
-            fig, ax = plt.subplots(figsize=(8, 5))
-            sns.barplot(data=high_volume, y='brnd_name', x=col, ax=ax, palette='viridis')
-            ax.set_xlabel(ylabel)
-            ax.set_title(f"Top 10 Most {view_mode.replace(' ', '')} Drugs in 2023")
-            plt.tight_layout()
-            st.pyplot(fig)
+        
+        # Only show chart when a specific drug is selected
+        if selected_drug != "All":
+            drug_in_high_volume = high_volume[high_volume['brnd_name'] == selected_drug]
+            if not drug_in_high_volume.empty:
+                fig, ax = plt.subplots(figsize=(7, 5))
+                y_pos = np.arange(len(drug_in_high_volume))
+                bars = ax.barh(y_pos, drug_in_high_volume[col], color='darkgreen', edgecolor='black', linewidth=0.5)
+                ax.set_yticks(y_pos)
+                ax.set_yticklabels(drug_in_high_volume['brnd_name'], fontsize=10)
+                ax.set_xlabel(ylabel, fontsize=12)
+                ax.set_title(f"Prescription Volume for {selected_drug}", fontsize=13, fontweight='bold')
+                ax.tick_params(axis='x', labelsize=10)
+                
+                # Add value labels
+                for i, bar in enumerate(bars):
+                    width = bar.get_width()
+                    ax.text(bar.get_x() + width + 0.1, bar.get_y() + bar.get_height()/2, 
+                           f'{width:,.0f}', va='center', ha='left', fontsize=9)
+                
+                plt.tight_layout()
+                st.pyplot(fig)
+
+        # Always show full top 10 table
+        st.dataframe(high_volume)
 
 # Tab 5: Model Explainability
 with tab5:
@@ -257,7 +290,6 @@ with tab5:
         st.markdown("💡 This insight is based on model behavior — SHAP integration coming soon.")
 
 # -------------------------------
-# -------------------------------
 # 6. Export Data
 # -------------------------------
 st.sidebar.markdown("---")
@@ -269,11 +301,6 @@ export_df = forecast_df.copy()
 if selected_drug != "All":
     export_df = export_df[export_df['brnd_name'] == selected_drug]
 
-# Optional: Filter by manufacturer if needed
-if selected_manufacturer != "All":
-    # Note: forecast_df may not have manufacturer info — only drug-level forecasts
-    pass  # Skip for now unless you've added manufacturer-level forecasts
-
 # Convert to CSV
 @st.cache_data
 def convert_df_to_csv(df):
@@ -281,7 +308,7 @@ def convert_df_to_csv(df):
 
 csv = convert_df_to_csv(export_df)
 
-# Use download_button directly (not inside a regular button)
+# Use download_button directly
 st.sidebar.download_button(
     label="Download Forecast CSV",
     data=csv,
