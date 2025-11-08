@@ -867,10 +867,11 @@ with tab1:
             if controls_container_right is not None:
                 with controls_container_right:
                     st.markdown("**Chart Tools:**")
+                    
                     # --- WORKING ZOOM FUNCTIONALITY ---
-                    # Use st.modal to create a larger, detailed view of the chart
-                    with st.modal("🔍 Zoomed View - Drug Spending Trend"):
-                     def show_zoomed_chart():
+                    # Use st.dialog to create a larger, detailed view of the chart
+                    @st.dialog("🔍 Zoomed View - Drug Spending Trend")
+                    def show_zoomed_chart():
                         st.markdown(f"### {t['drug_column']} {title}")
                         # Re-create the same figure with enhanced settings for zoomed view
                         fig_zoom = px.line(
@@ -896,23 +897,24 @@ with tab1:
                             height=600, # Larger height for detailed view
                             width=1000 # Larger width for detailed view
                         )
-                        st.plotly_chart(fig_zoom, use_container_width=False) # Use fixed size for modal
+                        st.plotly_chart(fig_zoom, use_container_width=False) # Use fixed size for dialog
                         st.markdown("---")
                         st.info("💡 Tip: Use your mouse to pan and zoom inside the chart for closer inspection.")
 
-                    # Button to trigger the modal
+                    # Button to trigger the dialog
                     if st.button("🔍 Zoom", key=f"zoom_chart_{view_mode}"):
                         show_zoomed_chart()
                     # --- END WORKING ZOOM ---
-                    
+
                     # Placeholder for Collapse Chart View functionality
                     # This button could minimize the chart itself, though panel collapse might be preferred.
                     # if st.button("➖ Collapse View", key=f"collapse_chart_view_{view_mode}"):
                     #     st.info("Collapse View feature placeholder.")
+            
             # --- END DYNAMIC CENTER PANEL & CONTROLS ---
 
             st.markdown("---")
-            
+
             # --- CONDITIONALLY RENDER SMART ALERTS ---
             # --- NEW: COLLAPSIBLE SMART ALERTS PANEL ---
             # Initialize session state for the alerts panel collapse
@@ -944,7 +946,6 @@ with tab1:
                 # st.markdown("<div style='text-align: center; font-size: 12px; color: gray;'>Smart Alerts Hidden</div>", unsafe_allow_html=True)
                 pass
             # --- END COLLAPSIBLE SMART ALERTS PANEL ---
-
 
 # ======================================================
 # 💬 RxVeritas Assistant (Final Full Version — All 25 Query Types Supported, Pylance Fix)
@@ -1278,8 +1279,8 @@ with tab2:
             if controls_container_right is not None:
                 with controls_container_right:
                     st.markdown("**Chart Tools:**")
-                    with st.dialog(f"🔍 Zoomed View - {t['top_ten_title']}{view_mode}"): 
-                      def show_zoomed_top_cost_drivers():
+                    @st.dialog(f"🔍 Zoomed View - {t['top_ten_title']}{view_mode}")
+                    def show_zoomed_top_cost_drivers():                     
                         st.markdown(f"### {t['top_ten_title']}{view_mode}")
                         fig_zoom = go.Figure()
                         if view_mode == t["total_spending"] and forecast_df is not None:
@@ -1394,7 +1395,7 @@ with tab3:
                 if controls_container_right is not None:
                     with controls_container_right:
                         st.markdown("**Chart Tools:**")
-                        @st.experimental_dialog(f"🔍 Zoomed View - {t['cagr_title']}")
+                        @st.dialog(f"🔍 Zoomed View - {t['compare_title']}{view_mode}") 
                         def show_zoomed_cagr():
                             st.markdown(f"### {t['cagr_subtitle']}")
                             fig_zoom = px.bar(
@@ -1501,7 +1502,7 @@ with tab4:
             if controls_container_right is not None:
                 with controls_container_right:
                     st.markdown("**Chart Tools:**")
-                    @st.experimental_dialog(f"🔍 Zoomed View - {t['compare_title']}{view_mode}")
+                    @st.dialog(f"🔍 Zoomed View - {t['compare_title']}{view_mode}") 
                     def show_zoomed_high_volume():
                         st.markdown(f"### {t['compare_title']}{view_mode}")
                         fig_zoom = px.bar(
