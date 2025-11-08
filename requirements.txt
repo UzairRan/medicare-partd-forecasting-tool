@@ -15,4 +15,5 @@ uvicorn
 requests
 python-dotenv 
 streamlit
- 
+streamlit-chat
+  
