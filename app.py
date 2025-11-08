@@ -869,8 +869,8 @@ with tab1:
                     st.markdown("**Chart Tools:**")
                     # --- WORKING ZOOM FUNCTIONALITY ---
                     # Use st.modal to create a larger, detailed view of the chart
-                    @st.dialog("🔍 Zoomed View - Drug Spending Trend") 
-                    def show_zoomed_chart():
+                    with st.modal("🔍 Zoomed View - Drug Spending Trend"):
+                     def show_zoomed_chart():
                         st.markdown(f"### {t['drug_column']} {title}")
                         # Re-create the same figure with enhanced settings for zoomed view
                         fig_zoom = px.line(
@@ -1278,8 +1278,8 @@ with tab2:
             if controls_container_right is not None:
                 with controls_container_right:
                     st.markdown("**Chart Tools:**")
-                    @st.experimental_dialog(f"🔍 Zoomed View - {t['top_ten_title']}{view_mode}")
-                    def show_zoomed_top_cost_drivers():
+                    with st.dialog(f"🔍 Zoomed View - {t['top_ten_title']}{view_mode}"): 
+                      def show_zoomed_top_cost_drivers():
                         st.markdown(f"### {t['top_ten_title']}{view_mode}")
                         fig_zoom = go.Figure()
                         if view_mode == t["total_spending"] and forecast_df is not None:
